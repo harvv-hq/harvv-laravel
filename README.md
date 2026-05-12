@@ -9,51 +9,49 @@ hit it — not just `/checkout`.
 > **v0.1.0 — early access.** Stable for production traffic; API may still
 > shift before v1.0. See the bake criteria at the bottom of this README.
 
-## Quick Install — Pre-Packagist (today)
+**Full developer docs at [docs.harvv.com/laravel](https://docs.harvv.com/laravel)** — this README is the install summary; the docs site has troubleshooting, manual paths, verify procedures, and the broader Harvv overview.
 
-Packagist publish is in progress. Until the listing lands (later today),
-install via Composer's VCS repository against this GitHub repo:
+## Quick install — pre-Packagist (today)
 
-```json
-// composer.json
-{
-  "repositories": [
-    { "type": "vcs", "url": "https://github.com/AxiomState/harvv-laravel" }
-  ]
-}
-```
+Packagist publish is in progress. Until the listing lands, install via
+Composer's VCS repository in one line:
 
 ```bash
+composer config repositories.harvv vcs https://github.com/AxiomState/harvv-laravel
 composer require harvv/laravel:dev-main
 php artisan harvv:install
 ```
 
-`dev-main` tracks the `main` branch; we tag releases (`v0.1.0`, `v0.1.1`, …)
-as semver becomes meaningful. Pin to a tag in production:
+That's the entire install. The `harvv:install` command prompts for your
+site key, generates an HMAC secret, writes both to `.env`, and offers to
+register the `HarvvContext` middleware automatically. Re-running is safe
+(idempotent — skips already-done steps).
+
+`dev-main` tracks the `main` branch; tag releases (`v0.1.0`, `v0.1.1`, …)
+will land as semver becomes meaningful. Pin to a tag in production:
 
 ```bash
 composer require harvv/laravel:^0.1
 ```
 
-Once `harvv/laravel` is live on Packagist, the **VCS block and the `:dev-main`
-suffix are no longer required** — the install becomes the standard one-liner
-shown in [Quickstart](#quickstart-2-minutes) below. Star this repo for the
-Packagist-live notification, or check back here — this section will be
-removed when the listing is live.
+Once `harvv/laravel` is live on Packagist, the VCS step disappears — the
+install reduces to `composer require harvv/laravel` then `php artisan harvv:install`.
 
 ## Quickstart (2 minutes)
 
 > Once Packagist publish completes, this is the only install path you need.
-> Until then, see [Quick Install — Pre-Packagist](#quick-install--pre-packagist-today).
+> Until then, see [Quick install — pre-Packagist](#quick-install--pre-packagist-today).
 
 ```bash
 composer require harvv/laravel
 php artisan harvv:install
 ```
 
-The install command prompts you for your site key (from
-[harvv.com/site/.../settings/install](https://harvv.com/docs/laravel#site-key))
-and writes `HARVV_SITE_KEY` to your `.env`. That's it.
+Grab your site key from your site's Settings → Install panel
+([Studio dashboard](https://harvv.com/site.html#/app), or read the
+[install doc](https://docs.harvv.com/laravel)). The `harvv:install` command
+prompts you for it and writes `HARVV_SITE_KEY` (plus `HARVV_HMAC_SECRET`,
+`HARVV_ENABLED=true`) to your `.env`.
 
 Then drop the pixel into your layout — either Blade directive:
 
@@ -144,25 +142,38 @@ The CI matrix runs every PR against every valid combination above. See
 php artisan harvv:verify
 ```
 
-Output shows: ServiceProvider booted ✓, middleware registered ✓, site key
-configured ✓, last successful pixel event received at \<timestamp\>.
+Runs five checks: site key set + shape-correct (16 hex), HMAC secret set
++ `hlv1_` prefix, `config('harvv.enabled') = true`, the `@harvv` Blade
+directive is registered, the `HarvvContext` middleware is registered.
+Exits non-zero on any required failure so CI can gate deploys on
+`php artisan harvv:verify`.
 
-Or visit your site's settings page in the Harvv dashboard — when the package
-is detected, a "Laravel package detected ✓" badge appears with the version
-you're running and the last event timestamp.
+Also prints the rendered pixel URL on this site — visit any page,
+View Source, look for that exact URL. That's your second-source verification.
+
+Once events flow, the site's Settings page in your Harvv dashboard shows a
+"Laravel package detected ✓" badge with the version you're running and the
+last event timestamp.
 
 ## Troubleshooting
 
-See [harvv.com/docs/laravel/troubleshooting](https://harvv.com/docs/laravel/troubleshooting)
-for the top issues and fixes. Common ones:
+Full troubleshooting at
+[docs.harvv.com/laravel#troubleshooting](https://docs.harvv.com/laravel#troubleshooting).
+Top hits:
 
-- **Pixel not loading?** Check `HARVV_SITE_KEY` is set in `.env` and the
-  config cache is cleared (`php artisan config:clear`).
-- **Middleware not adding context?** Confirm it's registered AFTER your
-  CSRF middleware but BEFORE your auth-redirect middleware.
-- **Telescope/Pulse noise from our outbound POSTs?** Filter out
-  `X-Harvv-Internal: 1` requests in your watchers.
-- **Filament admin showing pixel?** Add `admin/*` to
+- **`@harvv` renders empty in view-source.** Either `HARVV_SITE_KEY` is empty or
+  `HARVV_ENABLED=false`. Run `php artisan harvv:verify`. On pre-v0.1.1 installs,
+  `APP_ENV=local` also disabled the pixel — upgrade.
+- **`composer require harvv/laravel` — Package not found.** Packagist publish
+  hasn't completed yet. Use the VCS one-liner at the top of this README.
+- **Events show up but no Laravel route attached.** `HarvvContext` middleware
+  isn't in the stack, OR the `HARVV_HMAC_SECRET` in `.env` doesn't match the
+  one in Studio. Rotate from Studio → Settings.
+- **`php artisan harvv:install` — command not found.** Old install. Run
+  `composer update harvv/laravel`. The command shipped in v0.1.1 (2026-05-12).
+- **Telescope/Pulse noise from our outbound POSTs.** Filter `X-Harvv-Internal: 1`
+  requests in your watchers.
+- **Filament admin showing pixel.** Add `admin/*` to
   `config('harvv.context.excluded_routes')` (already in the default list).
 
 ## Uninstall
