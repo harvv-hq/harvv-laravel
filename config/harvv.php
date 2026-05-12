@@ -30,14 +30,22 @@ return [
     |--------------------------------------------------------------------------
     | Enabled
     |--------------------------------------------------------------------------
-    | Global on/off switch. Defaults to enabled in production + staging,
-    | disabled in 'local' and 'testing' so dev events don't pollute prod
-    | analytics. Override with HARVV_ENABLED=true|false to be explicit.
+    | Global on/off switch. 2026-05-12 default flipped after Lovable's QA
+    | report flagged the prior "default-disabled-in-local" behavior as a
+    | silent footgun — a junior would set HARVV_SITE_KEY, drop @harvv in
+    | the layout, see no pixel in view-source, assume the package was
+    | broken, and walk away with no error message.
+    |
+    | New default: enabled wherever HARVV_SITE_KEY is set, regardless of
+    | APP_ENV. Install verification (view-source on any page) works in
+    | local dev. Set HARVV_ENABLED=false explicitly if you don't want
+    | the pixel to fire in local. Server-side will tag local-dev events
+    | so analytics dashboards can filter them out if needed.
     */
 
     'enabled' => env(
         'HARVV_ENABLED',
-        ! in_array(env('APP_ENV', 'production'), ['local', 'testing'], true)
+        ! empty(env('HARVV_SITE_KEY'))
     ),
 
     /*
