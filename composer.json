@@ -1,0 +1,76 @@
+{
+  "name": "harvv/laravel",
+  "description": "Behavioral UX analytics for Laravel — detects rage clicks, dead clicks, form abandonment, scroll friction, and Core Web Vitals issues. Server-side context (route name, hashed user ID, request ID) lands in your dashboard so each detected issue is tied to the Laravel route + user that hit it.",
+  "type": "library",
+  "license": "MIT",
+  "keywords": [
+    "laravel",
+    "pixel",
+    "analytics",
+    "behavior",
+    "ux",
+    "rage-clicks",
+    "dead-clicks",
+    "core-web-vitals",
+    "session-analytics",
+    "harvv"
+  ],
+  "homepage": "https://harvv.com/laravel",
+  "support": {
+    "issues": "https://github.com/harvv/laravel/issues",
+    "source": "https://github.com/harvv/laravel",
+    "docs": "https://harvv.com/docs/laravel"
+  },
+  "authors": [
+    {
+      "name": "Harvv",
+      "email": "hello@harvv.com",
+      "homepage": "https://harvv.com",
+      "role": "Maintainer"
+    }
+  ],
+  "require": {
+    "php": "^8.2",
+    "illuminate/contracts": "^11.0|^12.0|^13.0",
+    "illuminate/support": "^11.0|^12.0|^13.0",
+    "illuminate/view": "^11.0|^12.0|^13.0",
+    "illuminate/console": "^11.0|^12.0|^13.0"
+  },
+  "require-dev": {
+    "orchestra/testbench": "^9.0|^10.0|^11.0",
+    "pestphp/pest": "^3.0|^4.0",
+    "pestphp/pest-plugin-laravel": "^3.0|^4.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Harvv\\Laravel\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Harvv\\Laravel\\Tests\\": "tests/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "Harvv\\Laravel\\HarvvServiceProvider"
+      ],
+      "aliases": {
+        "Harvv": "Harvv\\Laravel\\Facades\\Harvv"
+      }
+    }
+  },
+  "scripts": {
+    "test": "vendor/bin/pest",
+    "test:coverage": "vendor/bin/pest --coverage"
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true,
+  "config": {
+    "sort-packages": true,
+    "allow-plugins": {
+      "pestphp/pest-plugin": true
+    }
+  }
+}
