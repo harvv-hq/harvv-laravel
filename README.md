@@ -142,18 +142,10 @@ The CI matrix runs every PR against every valid combination above. See
 php artisan harvv:verify
 ```
 
-Runs five checks: site key set + shape-correct (16 hex), HMAC secret set
-+ `hlv1_` prefix, `config('harvv.enabled') = true`, the `@harvv` Blade
-directive is registered, the `HarvvContext` middleware is registered.
-Exits non-zero on any required failure so CI can gate deploys on
-`php artisan harvv:verify`.
-
-Also prints the rendered pixel URL on this site — visit any page,
-View Source, look for that exact URL. That's your second-source verification.
-
-Once events flow, the site's Settings page in your Harvv dashboard shows a
-"Laravel package detected ✓" badge with the version you're running and the
-last event timestamp.
+That's the whole checklist. It validates every required + optional piece
+(site key, HMAC secret, enabled flag, `@harvv` directive, middleware),
+prints the exact pixel URL to grep for in View Source, and exits non-zero
+on any required failure so you can gate CI deploys on it.
 
 ## Troubleshooting
 

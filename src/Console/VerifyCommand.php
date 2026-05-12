@@ -93,7 +93,10 @@ class VerifyCommand extends Command
             $middlewareRegistered = true;
             $checks[] = ['ok', 'Middleware', 'HarvvContext registered in app/Http/Kernel.php'];
         } else {
-            $checks[] = ['warn', 'Middleware', 'HarvvContext not registered. Pixel still works without it — but you won\'t get per-request route/user context attached to events. Add via php artisan harvv:install.'];
+            // 2026-05-12 — Lovable QA pass #2: hint used to say "Add via
+            // php artisan harvv:install" which re-runs the whole flow.
+            // Now points at the targeted --middleware-only flag.
+            $checks[] = ['warn', 'Middleware', 'HarvvContext not registered. Pixel still works without it — but you lose per-request route/user context on events. Add it with: php artisan harvv:install --middleware-only'];
         }
 
         // Print
@@ -120,6 +123,13 @@ class VerifyCommand extends Command
             $host = config('harvv.host', 'https://harvv.com');
             $this->line('  Pixel URL on this site: <fg=cyan>'.rtrim($host, '/').'/px/'.$siteKey.'/pixel.js</>');
             $this->line('  View any page → View Source → look for this URL. That\'s your verification.');
+            $this->info('');
+        }
+        // 2026-05-12 — Lovable QA pass #2: surface the vendor:publish path
+        // so power users know how to tune beyond env vars. Only mention if
+        // config/harvv.php hasn't already been published (no need to nag).
+        if (! file_exists($this->laravel->basePath('config/harvv.php'))) {
+            $this->line('  <fg=gray>Tip: run `php artisan vendor:publish --tag=harvv-config` to publish config/harvv.php for advanced tuning.</>');
             $this->info('');
         }
         return self::SUCCESS;

@@ -34,8 +34,10 @@ use Illuminate\Support\Str;
 class InstallCommand extends Command
 {
     protected $signature = 'harvv:install
-        {--site-key= : Your Harvv pixel key (32-char hex; from harvv.com Settings → Install)}
-        {--no-middleware : Skip the HarvvContext middleware registration prompt}';
+        {--site-key= : Your Harvv pixel key (16-char hex; from harvv.com Settings → Install)}
+        {--with-middleware : Register the HarvvContext middleware without prompting (for CI / scripted setups)}
+        {--no-middleware : Skip the HarvvContext middleware registration prompt}
+        {--middleware-only : Skip site-key / HMAC setup; only register middleware (use after a partial install)}';
 
     protected $description = 'Install + configure the Harvv pixel for this Laravel app (interactive).';
 
@@ -55,6 +57,26 @@ class InstallCommand extends Command
             return self::FAILURE;
         }
         $envContents = $files->get($envPath);
+
+        // ── --middleware-only fast path ───────────────────────────────
+        // Lovable's 2nd-pass QA flagged that there was no way to add the
+        // middleware after a partial install other than re-running every
+        // prompt. This flag short-circuits straight to the middleware step.
+        if ($this->option('middleware-only')) {
+            $this->line('Middleware-only mode — skipping site-key + HMAC steps.');
+            $registered = $this->registerMiddleware($files);
+            if ($registered === 'added') {
+                $this->line('  <fg=green>✓</> Added \Harvv\Laravel\Http\Middleware\HarvvContext::class to your app.');
+                return self::SUCCESS;
+            }
+            if ($registered === 'already') {
+                $this->line('  <fg=yellow>•</> Already registered. Nothing to do.');
+                return self::SUCCESS;
+            }
+            $this->line('  <fg=yellow>•</> Could not auto-register — add manually:');
+            $this->printManualMiddlewareSnippet();
+            return self::SUCCESS;
+        }
 
         // ── Step 1: site key ──────────────────────────────────────────
         $siteKey = $this->option('site-key') ?: $this->extractEnvValue($envContents, 'HARVV_SITE_KEY');
@@ -105,7 +127,20 @@ class InstallCommand extends Command
             $this->line('  Optional. Registering this middleware tags every HTML response with a signed');
             $this->line('  context blob (route name, hashed user id, request id) so issues land in the');
             $this->line('  Harvv dashboard tied to the exact Laravel route + user that hit them.');
-            if ($this->input->isInteractive() && $this->confirm('  Register HarvvContext middleware in this app?', true)) {
+
+            // Decide whether to register:
+            //   - --with-middleware → yes (non-interactive auto-register, for CI)
+            //   - interactive TTY    → ask
+            //   - non-interactive    → skip (printed snippet for manual setup)
+            $shouldRegister = false;
+            if ($this->option('with-middleware')) {
+                $shouldRegister = true;
+                $this->line('  --with-middleware specified, registering automatically.');
+            } elseif ($this->input->isInteractive()) {
+                $shouldRegister = $this->confirm('  Register HarvvContext middleware in this app?', true);
+            }
+
+            if ($shouldRegister) {
                 $registered = $this->registerMiddleware($files);
                 if ($registered === 'added') {
                     $this->line('  <fg=green>✓</> Added \Harvv\Laravel\Http\Middleware\HarvvContext::class to your app.');
@@ -116,7 +151,7 @@ class InstallCommand extends Command
                     $this->printManualMiddlewareSnippet();
                 }
             } else {
-                $this->line('  Skipped. Add manually when you want per-request context:');
+                $this->line('  Skipped. Add later with <fg=gray>php artisan harvv:install --middleware-only</> or manually:');
                 $this->printManualMiddlewareSnippet();
             }
         }
