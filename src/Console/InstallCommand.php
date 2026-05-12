@@ -37,19 +37,13 @@ class InstallCommand extends Command
         {--site-key= : Your Harvv pixel key (16-char hex; from harvv.com Settings → Install)}
         {--with-middleware : Register the HarvvContext middleware without prompting (for CI / scripted setups)}
         {--no-middleware : Skip the HarvvContext middleware registration prompt}
-        {--middleware-only : Skip site-key / HMAC setup; only register middleware (use after a partial install)}';
+        {--middleware-only : Skip site-key / HMAC setup; only register middleware (use after a partial install)}
+        {--rotate-hmac : Force regeneration of HARVV_HMAC_SECRET (default behavior is idempotent — keeps existing secret)}';
 
     protected $description = 'Install + configure the Harvv pixel for this Laravel app (interactive).';
 
     public function handle(Filesystem $files): int
     {
-        $this->info('');
-        $this->info('  ┌──────────────────────────────────────────────┐');
-        $this->info('  │  Harvv pixel — Laravel install               │');
-        $this->info('  │  Behavioral UX analytics for your customers  │');
-        $this->info('  └──────────────────────────────────────────────┘');
-        $this->info('');
-
         $envPath = $this->laravel->basePath('.env');
         if (! $files->exists($envPath)) {
             $this->warn('No .env file found at '.$envPath);
@@ -62,8 +56,10 @@ class InstallCommand extends Command
         // Lovable's 2nd-pass QA flagged that there was no way to add the
         // middleware after a partial install other than re-running every
         // prompt. This flag short-circuits straight to the middleware step.
+        // Banner suppressed in this mode (pass #3 feedback — the "Step 1/3"
+        // branding was jarring when the user explicitly asked to do step 3).
         if ($this->option('middleware-only')) {
-            $this->line('Middleware-only mode — skipping site-key + HMAC steps.');
+            $this->line('Registering HarvvContext middleware…');
             $registered = $this->registerMiddleware($files);
             if ($registered === 'added') {
                 $this->line('  <fg=green>✓</> Added \Harvv\Laravel\Http\Middleware\HarvvContext::class to your app.');
@@ -73,10 +69,18 @@ class InstallCommand extends Command
                 $this->line('  <fg=yellow>•</> Already registered. Nothing to do.');
                 return self::SUCCESS;
             }
-            $this->line('  <fg=yellow>•</> Could not auto-register — add manually:');
+            $this->error('  ✗ Could not auto-register middleware. Add manually:');
             $this->printManualMiddlewareSnippet();
-            return self::SUCCESS;
+            // Non-zero exit so CI / scripted users notice silent failure.
+            return self::FAILURE;
         }
+
+        $this->info('');
+        $this->info('  ┌──────────────────────────────────────────────┐');
+        $this->info('  │  Harvv pixel — Laravel install               │');
+        $this->info('  │  Behavioral UX analytics for your customers  │');
+        $this->info('  └──────────────────────────────────────────────┘');
+        $this->info('');
 
         // ── Step 1: site key ──────────────────────────────────────────
         $siteKey = $this->option('site-key') ?: $this->extractEnvValue($envContents, 'HARVV_SITE_KEY');
@@ -96,14 +100,24 @@ class InstallCommand extends Command
         }
 
         // ── Step 2: HMAC secret ───────────────────────────────────────
+        // Idempotent by default (pass #3 fix): re-running `harvv:install -n`
+        // used to silently rotate the secret, invalidating any in-flight
+        // signed contexts. Now we skip when present and require an explicit
+        // --rotate-hmac flag to regenerate.
         $hmacSecret = $this->extractEnvValue($envContents, 'HARVV_HMAC_SECRET');
         if (! $hmacSecret) {
             $hmacSecret = 'hlv1_'.bin2hex(random_bytes(32));
             $this->line('Step 2/3 — Generated HMAC secret ('.substr($hmacSecret, 0, 12).'…).');
             $this->line('  Used to sign per-request context (route, hashed user id) so the');
             $this->line('  receiver can verify nothing tampered with the meta tag in flight.');
+        } elseif ($this->option('rotate-hmac')) {
+            $hmacSecret = 'hlv1_'.bin2hex(random_bytes(32));
+            $this->line('Step 2/3 — <fg=yellow>Rotating</> HMAC secret ('.substr($hmacSecret, 0, 12).'…). --rotate-hmac specified.');
+            $this->line('  In-flight signed contexts using the old secret will now fail HMAC validation');
+            $this->line('  until your app picks up the new value (deploy + restart workers).');
         } else {
             $this->line('Step 2/3 — HMAC secret already set ('.substr($hmacSecret, 0, 12).'…). Skipping.');
+            $this->line('  (Pass --rotate-hmac to regenerate.)');
         }
 
         // Persist both keys to .env
@@ -147,6 +161,18 @@ class InstallCommand extends Command
                 } elseif ($registered === 'already') {
                     $this->line('  <fg=yellow>•</> Already registered. Skipping.');
                 } else {
+                    // 2026-05-12 pass #3: when --with-middleware was set but
+                    // auto-register fell through, the original code printed
+                    // the snippet but still exited 0 — CI silently succeeded
+                    // with no middleware registered. Now we exit non-zero in
+                    // that exact case so a scripted setup fails loudly.
+                    if ($this->option('with-middleware')) {
+                        $this->error('  ✗ --with-middleware was specified but auto-register failed.');
+                        $this->error('     Your bootstrap/app.php / app/Http/Kernel.php may have non-default shape.');
+                        $this->error('     Add manually (snippet below) or re-run without --with-middleware.');
+                        $this->printManualMiddlewareSnippet();
+                        return self::FAILURE;
+                    }
                     $this->line('  <fg=yellow>•</> Could not auto-register — add manually:');
                     $this->printManualMiddlewareSnippet();
                 }
@@ -210,22 +236,34 @@ class InstallCommand extends Command
     /**
      * Try to register HarvvContext middleware in the host app. Returns
      * 'added', 'already', or 'manual' (caller prints the manual snippet).
+     *
+     * Regex pattern matches all three default Laravel 11+ shapes:
+     *   ->withMiddleware(function (Middleware $middleware) { ... })
+     *   ->withMiddleware(function (Middleware $middleware): void { ... })   ← Laravel 13 default
+     *   ->withMiddleware(function () { ... })                               ← no-arg variant
+     *
+     * The 2026-05-12 Lovable pass #3 found the original regex didn't tolerate
+     * the `: void` return type, so a stock `laravel new` install on 13.x
+     * silently fell through to "manual" — the marquee `--with-middleware` CI
+     * flow was effectively a no-op. The fix: optional `\s*:\s*\w+\s*` between
+     * the closing paren of the signature and the opening brace of the body.
      */
     private function registerMiddleware(Filesystem $files): string
     {
-        // Laravel 11/12: bootstrap/app.php with ->withMiddleware()
+        // Laravel 11+ : bootstrap/app.php with ->withMiddleware()
         $bootstrap = $this->laravel->basePath('bootstrap/app.php');
         if ($files->exists($bootstrap)) {
             $contents = $files->get($bootstrap);
             if (str_contains($contents, 'Harvv\\Laravel\\Http\\Middleware\\HarvvContext')) {
                 return 'already';
             }
-            // Look for ->withMiddleware(function (Middleware $middleware) { ... })
-            // and add $middleware->web(append: [HarvvContext::class]); inside.
-            if (preg_match('/->withMiddleware\s*\(\s*function\s*\([^)]*\)\s*\{/', $contents)) {
+            // Match the withMiddleware closure header, with or without a
+            // `: void` (or any other return-type hint) between `)` and `{`.
+            $pattern = '/->withMiddleware\s*\(\s*function\s*\(([^)]*)\)\s*(:\s*\w+\s*)?\{/';
+            if (preg_match($pattern, $contents)) {
                 $injected = preg_replace(
-                    '/->withMiddleware\s*\(\s*function\s*\(([^)]*)\)\s*\{/',
-                    "->withMiddleware(function ($1) {\n        \$middleware->web(append: [\\Harvv\\Laravel\\Http\\Middleware\\HarvvContext::class]);",
+                    $pattern,
+                    "->withMiddleware(function ($1)$2{\n        \$middleware->web(append: [\\Harvv\\Laravel\\Http\\Middleware\\HarvvContext::class]);",
                     $contents,
                     1
                 );
@@ -260,8 +298,12 @@ class InstallCommand extends Command
 
     private function printManualMiddlewareSnippet(): void
     {
+        // 2026-05-12 pass #3: drop the "Laravel 11/12" version label. The
+        // snippet works on every version with bootstrap/app.php (11, 12, 13+).
+        // A version-stamped comment misled juniors on Laravel 13 to assume
+        // they needed a different snippet and abandon the install.
         $this->line('');
-        $this->line('     <fg=gray>// Laravel 11/12 — bootstrap/app.php</>');
+        $this->line('     <fg=gray>// bootstrap/app.php</>');
         $this->line('     <fg=gray>->withMiddleware(function (Middleware $middleware) {</>');
         $this->line('     <fg=gray>    $middleware->web(append: [\Harvv\Laravel\Http\Middleware\HarvvContext::class]);</>');
         $this->line('     <fg=gray>})</>');
