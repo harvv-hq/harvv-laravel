@@ -9,7 +9,42 @@ hit it — not just `/checkout`.
 > **v0.1.0 — early access.** Stable for production traffic; API may still
 > shift before v1.0. See the bake criteria at the bottom of this README.
 
+## Quick Install — Pre-Packagist (today)
+
+Packagist publish is in progress. Until the listing lands (later today),
+install via Composer's VCS repository against this GitHub repo:
+
+```json
+// composer.json
+{
+  "repositories": [
+    { "type": "vcs", "url": "https://github.com/AxiomState/harvv-laravel" }
+  ]
+}
+```
+
+```bash
+composer require harvv/laravel:dev-main
+php artisan harvv:install
+```
+
+`dev-main` tracks the `main` branch; we tag releases (`v0.1.0`, `v0.1.1`, …)
+as semver becomes meaningful. Pin to a tag in production:
+
+```bash
+composer require harvv/laravel:^0.1
+```
+
+Once `harvv/laravel` is live on Packagist, the **VCS block and the `:dev-main`
+suffix are no longer required** — the install becomes the standard one-liner
+shown in [Quickstart](#quickstart-2-minutes) below. Star this repo for the
+Packagist-live notification, or check back here — this section will be
+removed when the listing is live.
+
 ## Quickstart (2 minutes)
+
+> Once Packagist publish completes, this is the only install path you need.
+> Until then, see [Quick Install — Pre-Packagist](#quick-install--pre-packagist-today).
 
 ```bash
 composer require harvv/laravel
