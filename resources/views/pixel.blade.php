@@ -22,4 +22,4 @@
      are present and non-empty.
      ============================================================ --}}
 
-<script async src="{{ $host }}/px/{{ $siteKey }}/pixel.js"></script>
+<script data-cfasync="false" async src="{{ $host }}/px/{{ $siteKey }}/pixel.js" data-no-defer="1" data-no-optimize="1" data-no-minify="1" data-noptimize="1" data-wpfc-render="false" data-no-rocket-lazyload nowprocket nitro-exclude fetchpriority="high"></script>
