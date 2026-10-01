@@ -17,8 +17,8 @@
   ],
   "homepage": "https://harvv.com/laravel",
   "support": {
-    "issues": "https://github.com/AxiomState/harvv-laravel/issues",
-    "source": "https://github.com/AxiomState/harvv-laravel",
+    "issues": "https://github.com/harvv-hq/harvv-laravel/issues",
+    "source": "https://github.com/harvv-hq/harvv-laravel",
     "docs": "https://docs.harvv.com/laravel"
   },
   "authors": [

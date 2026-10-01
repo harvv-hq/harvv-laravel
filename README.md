@@ -17,7 +17,7 @@ Packagist publish is in progress. Until the listing lands, install via
 Composer's VCS repository in one line:
 
 ```bash
-composer config repositories.harvv vcs https://github.com/AxiomState/harvv-laravel
+composer config repositories.harvv vcs https://github.com/harvv-hq/harvv-laravel
 composer require harvv/laravel:dev-main
 php artisan harvv:install
 ```
